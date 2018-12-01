@@ -4,6 +4,7 @@ namespace PRayno\CasAuthBundle\Security;
 
 use GuzzleHttp\Client;
 use PRayno\CasAuthBundle\Event\CASAuthenticationFailureEvent;
+use PRayno\CasAuthBundle\Event\CASServiceTicketValidationSuccessEvent;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -63,10 +64,11 @@ class CasAuthenticator extends AbstractGuardAuthenticator
      */
     public function getCredentials(Request $request)
     {
-        $url = $this->server_validation_url.'?'.$this->query_ticket_parameter.'='.
-            $request->get($this->query_ticket_parameter).'&'.
+        $serviceTicketValue = $request->get($this->query_ticket_parameter);
+        $url = $this->server_validation_url.'?'.
+            $this->query_ticket_parameter.'='.$serviceTicketValue.'&'.
             $this->query_service_parameter.'='.urlencode($this->removeCasTicket($request->getUri()));
-
+        
         $client = new Client();
         $response = $client->request('GET', $url, $this->options);
 
@@ -75,6 +77,9 @@ class CasAuthenticator extends AbstractGuardAuthenticator
         $xml = new \SimpleXMLElement($string, 0, false, $this->xml_namespace, true);
 
         if (isset($xml->authenticationSuccess)) {
+            $event = new CASServiceTicketValidationSuccessEvent($request, $serviceTicketValue);
+            $this->eventDispatcher->dispatch(CASServiceTicketValidationSuccessEvent::POST_MESSAGE, $event);
+
             return (array) $xml->authenticationSuccess;
         }
     }
